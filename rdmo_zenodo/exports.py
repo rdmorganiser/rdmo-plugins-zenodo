@@ -2,6 +2,7 @@ import logging
 
 from django import forms
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import redirect, render, reverse
 from django.utils.translation import gettext_lazy as _
 
@@ -120,7 +121,13 @@ class ZenodoExportProvider(OauthProviderMixin, Export):
                 creator = {
                     'name': user.get_full_name()
                 }
-                #TODO: add ORCID
+
+                try:
+                    orcid_socialaccount = user.socialaccount_set.get(provider='orcid')
+                    creator['orcid'] = orcid_socialaccount.uid
+                except ObjectDoesNotExist:
+                    pass
+
                 metadata['creators'].append(creator)
 
         # set the resource_type from the settings
