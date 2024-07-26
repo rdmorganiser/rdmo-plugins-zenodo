@@ -59,7 +59,7 @@ class ZenodoExportProvider(OauthProviderMixin, Export):
             return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=200)
 
     def post_success(self, request, response):
-        zenodo_url = response.json().get('links', {}).get('html')
+        zenodo_url = response.json().get('links', {}).get('self_html')
         if zenodo_url:
             return redirect(zenodo_url)
         else:
@@ -90,7 +90,7 @@ class ZenodoExportProvider(OauthProviderMixin, Export):
 
     @property
     def deposit_url(self):
-        return f'{self.zenodo_url}/api/deposit/depositions'
+        return f'{self.zenodo_url}/api/records'
 
     @property
     def redirect_path(self):
@@ -100,7 +100,41 @@ class ZenodoExportProvider(OauthProviderMixin, Export):
         return self.deposit_url
 
     def get_post_data(self, set_index):
+        # see https://inveniordm.docs.cern.ch/reference/metadata/ for invenio metadata
         metadata = {}
+
+        # set the resource_type from the settings
+        resource_type = settings.ZENODO_PROVIDER.get('resource_type')
+        if resource_type:
+            metadata['resource_type'] = {
+                'id': resource_type
+            }
+
+        # add the creators from the project members
+        add_project_members = settings.ZENODO_PROVIDER.get('add_project_members')
+        if add_project_members:
+            metadata['creators'] = []
+            for user in self.project.user.all():
+                creator = {
+                    'family_name': user.last_name,
+                    'given_name': user.first_name,
+                    'type': 'personal'
+                }
+
+                try:
+                    orcid_socialaccount = user.socialaccount_set.get(provider='orcid')
+                    creator['identifiers'] = [
+                        {
+                            'scheme': 'orcid',
+                            'identifier': orcid_socialaccount.uid
+                        }
+                    ]
+                except ObjectDoesNotExist:
+                    pass
+
+                metadata['creators'].append({
+                    'person_or_org': creator
+                })
 
         # set the title from the title or id or the running index
         metadata['title'] =  \
@@ -113,61 +147,30 @@ class ZenodoExportProvider(OauthProviderMixin, Export):
         if description:
             metadata['description'] = description
 
-        # add the creators from the project members
-        add_project_members = settings.ZENODO_PROVIDER.get('add_project_members')
-        if add_project_members:
-            metadata['creators'] = []
-            for user in self.project.user.all():
-                creator = {
-                    'name': user.get_full_name()
-                }
-
-                try:
-                    orcid_socialaccount = user.socialaccount_set.get(provider='orcid')
-                    creator['orcid'] = orcid_socialaccount.uid
-                except ObjectDoesNotExist:
-                    pass
-
-                metadata['creators'].append(creator)
-
-        # set the resource_type from the settings
-        upload_type = settings.ZENODO_PROVIDER.get('upload_type')
-        if upload_type:
-            metadata['upload_type'] = upload_type
-
-        # set the access_right from the settings
-        access_right = settings.ZENODO_PROVIDER.get('access_right')
-        if access_right:
-            metadata['access_right'] = access_right
-
-        communities = settings.ZENODO_PROVIDER.get('communities')
-        if communities:
-            metadata['communities'] = [
-                {'identifier': community_id} for community_id in communities
-            ]
-
+        # set the rights/licenses
         for rights in self.get_values('project/dataset/sharing/conditions', set_index=set_index):
             if rights.option:
-                metadata['license'] = self.rights_uri_options.get(rights.option.uri_path)
+                metadata['rights'] = [{
+                    'id': self.rights_uri_options.get(rights.option.uri_path)
+                }]
                 break
 
-        # # set the publisher from the settings
-        # publisher = settings.ZENODO_PROVIDER.get('publisher')
-        # if publisher:
-        #     metadata['publisher'] = publisher
+        # set the language from the settings
+        language = settings.ZENODO_PROVIDER.get('language')
+        if language:
+            metadata['languages'] = [
+                {'id': language}
+            ]
 
-        # # set the funder from the settings
-        # funding_references = settings.ZENODO_PROVIDER.get('fundingReferences')
-        # if funding_references:
-        #     metadata['funding_references'] = []
-        #     for funding_reference in funding_references:
-        #         metadata['funding_references'].append({
-        #             'funderName': funding_reference.get('funderName'),
-        #             'funderIdentifier': funding_reference.get('funderIdentifier'),
-        #             'awardNumber': funding_reference.get('awardNumber'),
-        #             'awardTitle': funding_reference.get('awardTitle'),
-        #             'awardURI': funding_reference.get('awardURI'),
-        #         })
+        # set the publisher from the settings
+        publisher = settings.ZENODO_PROVIDER.get('publisher')
+        if publisher:
+            metadata['publisher'] = publisher
+
+        # set the funding from the settings
+        funding = settings.ZENODO_PROVIDER.get('funding')
+        if funding:
+            metadata['funding'] = funding
 
         return {
             'metadata': metadata
