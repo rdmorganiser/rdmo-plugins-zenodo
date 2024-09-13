@@ -129,7 +129,7 @@ class ZenodoExportProvider(OauthProviderMixin, Export):
                             'identifier': orcid_socialaccount.uid
                         }
                     ]
-                except ObjectDoesNotExist:
+                except (ObjectDoesNotExist, AttributeError):
                     pass
 
                 metadata['creators'].append({
