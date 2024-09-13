@@ -39,12 +39,32 @@ ZENODO_PROVIDER = {
     'client_id': os.getenv('ZENODO_CLIENT_ID'),
     'client_secret':  os.getenv('ZENODO_CLIENT_SECRET'),
     'add_project_members': True,  # add the members of the project as creators to each dataset
-    'upload_type': 'dataset',     # specify the resource type
-    'access_right': 'open',       # specify whether the dataset is open, embargoed, restricted, or closed
+    'resource_type': 'dataset',   # specify the resource type
+    'language': 'eng',            # specify the language
+    'publisher': '',              # specify the publisher
+    'funding': [                  # specify funding information
+        {
+            'funder': {
+                'name': 'Deutsche Forschungsgemeinschaft'
+            },
+            'award': {
+                'title': {
+                    'en': 'Excellence Strategy'
+                },
+                'number': 'EXC12345/6',
+                'identifiers': [
+                    {
+                        'scheme': 'url',
+                        'identifier': 'https://www.dfg.de/en/research-funding/funding-initiative/excellence-strategy'
+                    }
+                ]
+            }
+        }
+    ]
 }
 ```
 
 Usage
 -----
 
-The plugins apear as export options on the RDMO project overview.
+The plugins apears as export options on the RDMO project overview.
