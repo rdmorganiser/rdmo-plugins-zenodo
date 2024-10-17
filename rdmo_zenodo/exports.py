@@ -127,6 +127,44 @@ class ZenodoExportProvider(BaseZenodoExportProvider):
         # see https://inveniordm.docs.cern.ch/reference/metadata/ for invenio metadata
         metadata = {}
 
+        # set the title from the title or id or the running index
+        metadata['title'] = self.project.title
+
+        # set the resource_type from the settings
+        metadata['resource_type'] = {'id': 'publication-datamanagementplan'}
+
+        # set the description
+        description = self.project.description or \
+                    f"Data Management Plan for project {self.project.title}"
+        # self.get_text('project/dataset/description', set_index=set_index)
+        if description:
+            metadata['description'] = description
+
+        # set subjects
+        metadata['subjects'] = [
+            {
+                'subject': 'Data Management Plan'
+            },
+            {
+                'subject': 'DMP'
+            }
+        ]
+
+        # set keywords
+        keywords = self.get_values('project/research_question/keywords', set_index=set_index)
+        for keyword in keywords:
+            metadata['subjects'].append({
+                'subject': keyword.text
+            })
+
+        return {
+            'metadata': metadata
+        }
+
+    def get_dataset_post_data(self, set_index):
+        # see https://inveniordm.docs.cern.ch/reference/metadata/ for invenio metadata
+        metadata = {}
+
         # set the resource_type from the settings
         resource_type = settings.ZENODO_PROVIDER.get('resource_type')
         if resource_type:
