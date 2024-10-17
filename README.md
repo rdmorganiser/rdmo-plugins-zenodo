@@ -22,7 +22,7 @@ Add the plugin to `PROJECT_EXPORTS` in `config/settings/local.py`:
 ```python
 PROJECT_EXPORTS += [
     ('zenodo', _('Directly to Zenodo'), 'rdmo_zenodo.exports.ZenodoExportProvider'),
-    ('zenodo', _('Directly to Zenodo'), 'rdmo_zenodo.exports.ZenodoPublishProvider')
+    ('zenodo-publish', _('Publish to Zenodo'), 'rdmo_zenodo.exports.ZenodoPublishProvider')
 ]
 ```
 
