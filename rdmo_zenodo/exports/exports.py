@@ -3,65 +3,13 @@ import logging
 from django import forms
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
-from django.shortcuts import redirect, render, reverse
+from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 
-from rdmo.projects.exports import Export
-from rdmo.services.providers import OauthProviderMixin
+from .base import BaseZenodoExportProvider
 
 logger = logging.getLogger(__name__)
 
-
-class BaseZenodoExportProvider(OauthProviderMixin, Export):
-
-    @property
-    def client_id(self):
-        return settings.ZENODO_PROVIDER['client_id']
-
-    @property
-    def client_secret(self):
-        return settings.ZENODO_PROVIDER['client_secret']
-
-    @property
-    def zenodo_url(self):
-        return settings.ZENODO_PROVIDER.get('zenodo_url', 'https://sandbox.zenodo.org').strip('/')
-
-    @property
-    def authorize_url(self):
-        return f'{self.zenodo_url}/oauth/authorize'
-
-    @property
-    def token_url(self):
-        return f'{self.zenodo_url}/oauth/token'
-
-    @property
-    def deposit_url(self):
-        return f'{self.zenodo_url}/api/records'
-
-    @property
-    def redirect_path(self):
-        return reverse('oauth_callback', args=['zenodo'])
-
-    def get_authorize_params(self, request, state):
-        return {
-            'response_type': 'code',
-            'client_id': self.client_id,
-            'scope': 'deposit:write',
-            'redirect_uri': request.build_absolute_uri(self.redirect_path),
-            'state': state
-        }
-
-    def get_callback_data(self, request):
-        return {
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'grant_type': 'authorization_code',
-            'redirect_uri': request.build_absolute_uri(self.redirect_path),
-            'code': request.GET.get('code')
-        }
-
-    def get_error_message(self, response):
-        return response.json().get('errors')
 
 
 class ZenodoExportProvider(BaseZenodoExportProvider):
@@ -124,44 +72,6 @@ class ZenodoExportProvider(BaseZenodoExportProvider):
         return self.deposit_url
 
     def get_post_data(self, set_index):
-        # see https://inveniordm.docs.cern.ch/reference/metadata/ for invenio metadata
-        metadata = {}
-
-        # set the title from the title or id or the running index
-        metadata['title'] = self.project.title
-
-        # set the resource_type from the settings
-        metadata['resource_type'] = {'id': 'publication-datamanagementplan'}
-
-        # set the description
-        description = self.project.description or \
-                    f"Data Management Plan for project {self.project.title}"
-        # self.get_text('project/dataset/description', set_index=set_index)
-        if description:
-            metadata['description'] = description
-
-        # set subjects
-        metadata['subjects'] = [
-            {
-                'subject': 'Data Management Plan'
-            },
-            {
-                'subject': 'DMP'
-            }
-        ]
-
-        # set keywords
-        keywords = self.get_values('project/research_question/keywords', set_index=set_index)
-        for keyword in keywords:
-            metadata['subjects'].append({
-                'subject': keyword.text
-            })
-
-        return {
-            'metadata': metadata
-        }
-
-    def get_dataset_post_data(self, set_index):
         # see https://inveniordm.docs.cern.ch/reference/metadata/ for invenio metadata
         metadata = {}
 
