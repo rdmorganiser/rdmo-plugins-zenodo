@@ -1,8 +1,6 @@
 import logging
 
 from django import forms
-from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 
@@ -11,8 +9,9 @@ from .base import BaseZenodoExportProvider
 logger = logging.getLogger(__name__)
 
 
-
 class ZenodoPublishProvider(BaseZenodoExportProvider):
+
+    RDMO_PLUGIN_KEY = "zenodo-publish"
 
     rights_uri_options = {
         'dataset_license_types/71': 'cc-by-4.0',
@@ -33,9 +32,7 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
             self.fields['snapshot'].widget = forms.RadioSelect(choices=snapshot_choices)
 
     def render(self):
-        datasets = self.get_set('project/dataset/id')
-        # get project snapshots
-        snapshot_choices = [(dataset.set_index, dataset.value)for dataset in datasets]
+        snapshot_choices = [(i.id,i.title) for i in self.project.snapshots.all()]
 
         self.store_in_session(self.request, 'snapshot_choices', snapshot_choices)
 
@@ -45,16 +42,28 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
 
         return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=200)
 
+    def upload_file_to_zenodo(self, file):
+        # placeholder for posting the file
+        return
+
     def submit(self):
-        snapshot_choices = self.get_from_session(self.request, 'snapshot_choices')
+        snapshot_choices = self.project.snapshots.all()
         form = self.Form(self.request.POST, snapshot_choices=snapshot_choices)
 
         if 'cancel' in self.request.POST:
             return redirect('project', self.project.id)
 
         if form.is_valid():
-            url = self.get_post_url()
-            data = self.get_post_data(form.cleaned_data['snapshot'])
+            url = self.get_post_url()  # deposit url
+            snapshot_id = form.cleaned_data['snapshot']
+            breakpoint()
+            snapshot = self.project.snapshots.get(id=snapshot_id)
+            data = self.get_post_data(snapshot)
+            zen_data_response = self.post(self.request, url, data)
+            rdmo_pdf_response = self.render_snapshot_to_pdf(snapshot)
+            zen_pdf_response = self.upload_file_to_zenodo(rdmo_pdf_response.content)
+            return zen_data_response
+
             return self.post(self.request, url, data)
         else:
             return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=200)
@@ -72,20 +81,19 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
     def get_post_url(self):
         return self.deposit_url
 
-    def get_post_data(self, set_index):
+    def get_post_data(self, snapshot):
         # see https://inveniordm.docs.cern.ch/reference/metadata/ for invenio metadata
         metadata = {}
 
         # set the title from the title or id or the running index
-        metadata['title'] = self.project.title
+        metadata['title'] = snapshot.title
 
         # set the resource_type from the settings
         metadata['resource_type'] = {'id': 'publication-datamanagementplan'}
 
         # set the description
-        description = self.project.description or \
-                    f"Data Management Plan for project {self.project.title}"
-        # self.get_text('project/dataset/description', set_index=set_index)
+        description = snapshot.description or \
+                    f"Data Management Plan for project {snapshot.title}"
         if description:
             metadata['description'] = description
 
@@ -100,11 +108,11 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
         ]
 
         # set keywords
-        keywords = self.get_values('project/research_question/keywords', set_index=set_index)
-        for keyword in keywords:
-            metadata['subjects'].append({
-                'subject': keyword.text
-            })
+        # keywords = self.get_values('project/research_question/keywords', set_index=set_index)
+        # for keyword in keywords:
+        #     metadata['subjects'].append({
+        #         'subject': keyword.text
+        #     })
 
         return {
             'metadata': metadata
