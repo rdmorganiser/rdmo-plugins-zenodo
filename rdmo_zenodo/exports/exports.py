@@ -8,8 +8,10 @@ from django.utils.translation import gettext_lazy as _
 
 from .base import BaseZenodoExportProvider
 
-logger = logging.getLogger(__name__)
+from rdmo.projects.models import Snapshot, Value
+from rdmo.domain.models import Attribute
 
+logger = logging.getLogger(__name__)
 
 class ZenodoExportProvider(BaseZenodoExportProvider):
 
@@ -25,42 +27,66 @@ class ZenodoExportProvider(BaseZenodoExportProvider):
 
     class Form(forms.Form):
 
-        dataset = forms.CharField(label=_('Select dataset of your project'))
+        snapshot = forms.CharField(label=_('Select snapshot of your project'))
 
         def __init__(self, *args, **kwargs):
-            dataset_choices = kwargs.pop('dataset_choices')
+            snapshot_choices = kwargs.pop('snapshot_choices')
             super().__init__(*args, **kwargs)
 
-            self.fields['dataset'].widget = forms.RadioSelect(choices=dataset_choices)
+            self.fields['snapshot'].widget = forms.RadioSelect(choices=snapshot_choices)
+
+    def get_snapshots(self):
+        """Retrieve all snapshots for the current project."""
+        return Snapshot.objects.filter(project=self.project)
 
     def render(self):
-        datasets = self.get_set('project/dataset/id')
-        dataset_choices = [(dataset.set_index, dataset.value)for dataset in datasets]
+        snapshots = self.get_snapshots()
+        snapshot_choices = [(snapshot.id, snapshot.title or f"Snapshot {snapshot.id}") for snapshot in snapshots]
 
-        self.store_in_session(self.request, 'dataset_choices', dataset_choices)
+        self.store_in_session(self.request, 'snapshot_choices', snapshot_choices)
 
         form = self.Form(
-            dataset_choices=dataset_choices
+            snapshot_choices=snapshot_choices
         )
 
         return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=200)
 
     def submit(self):
-        dataset_choices = self.get_from_session(self.request, 'dataset_choices')
-        form = self.Form(self.request.POST, dataset_choices=dataset_choices)
+        snapshot_choices = self.get_from_session(self.request, 'snapshot_choices')
+
+        form = self.Form(self.request.POST, snapshot_choices=snapshot_choices)
 
         if 'cancel' in self.request.POST:
             return redirect('project', self.project.id)
 
         if form.is_valid():
+            snapshot_id = form.cleaned_data['snapshot']
+            snapshot = Snapshot.objects.get(id=snapshot_id)
+
             url = self.get_post_url()
-            data = self.get_post_data(form.cleaned_data['dataset'])
+            data = self.get_post_data(snapshot)
             return self.post(self.request, url, data)
         else:
             return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=200)
 
     def post_success(self, request, response):
-        zenodo_url = response.json().get('links', {}).get('self_html')
+        # Log the entire response for debugging
+        logger.debug(f"Zenodo response status code: {response.status_code}")
+        logger.debug(f"Zenodo response headers: {response.headers}")
+        logger.debug(f"Zenodo response content: {response.content.decode('utf-8')}")
+
+        # Parse the response JSON
+        try:
+            response_json = response.json()
+            logger.debug(f"Zenodo response JSON: {response_json}")
+        except ValueError:
+            logger.error("Failed to parse JSON response from Zenodo.")
+            return render(request, 'core/error.html', {
+                'title': _('ZENODO error'),
+                'errors': [_('Failed to parse JSON response from Zenodo.')]
+            }, status=200)
+
+        zenodo_url = response_json.get('links', {}).get('self_html')
         if zenodo_url:
             return redirect(zenodo_url)
         else:
@@ -72,79 +98,49 @@ class ZenodoExportProvider(BaseZenodoExportProvider):
     def get_post_url(self):
         return self.deposit_url
 
-    def get_post_data(self, set_index):
+    def get_values_from_snapshot(self, attribute_path, snapshot):
+        """Retrieve values from a snapshot for a given attribute path."""
+        try:
+            attribute = Attribute.objects.get(path=attribute_path)
+        except Attribute.DoesNotExist:
+            return []
+
+        return Value.objects.filter(project=self.project, snapshot=snapshot, attribute=attribute)
+
+    def get_text_from_snapshot(self, attribute_path, snapshot):
+        """Retrieve the text of the first value from a snapshot for a given attribute path."""
+        values = self.get_values_from_snapshot(attribute_path, snapshot)
+        if values:
+            return values[0].text
+        return ''
+
+    def get_post_data(self, snapshot):
         # see https://inveniordm.docs.cern.ch/reference/metadata/ for invenio metadata
         metadata = {}
 
+        # set the title from the snapshot's title or id
+        metadata['title'] = snapshot.title or f"Snapshot {snapshot.id}"
+
         # set the resource_type from the settings
-        resource_type = settings.ZENODO_PROVIDER.get('resource_type')
-        if resource_type:
-            metadata['resource_type'] = {
-                'id': resource_type
-            }
-
-        # add the creators from the project members
-        add_project_members = settings.ZENODO_PROVIDER.get('add_project_members')
-        if add_project_members:
-            metadata['creators'] = []
-            for user in self.project.user.all():
-                creator = {
-                    'family_name': user.last_name,
-                    'given_name': user.first_name,
-                    'type': 'personal'
-                }
-
-                try:
-                    orcid_socialaccount = user.socialaccount_set.get(provider='orcid')
-                    creator['identifiers'] = [
-                        {
-                            'scheme': 'orcid',
-                            'identifier': orcid_socialaccount.uid
-                        }
-                    ]
-                except (ObjectDoesNotExist, AttributeError):
-                    pass
-
-                metadata['creators'].append({
-                    'person_or_org': creator
-                })
-
-        # set the title from the title or id or the running index
-        metadata['title'] =  \
-            self.get_text('project/dataset/title', set_index=set_index) or \
-            self.get_text('project/dataset/id', set_index=set_index) or \
-            f'Dataset #{set_index + 1}'
+        metadata['resource_type'] = {'id': 'publication-datamanagementplan'}
 
         # set the description
-        description = self.get_text('project/dataset/description', set_index=set_index)
+        description = snapshot.description or f"Data Management Plan for project {self.project.title}"
         if description:
             metadata['description'] = description
 
-        # set the rights/licenses
-        for rights in self.get_values('project/dataset/sharing/conditions', set_index=set_index):
-            if rights.option:
-                metadata['rights'] = [{
-                    'id': self.rights_uri_options.get(rights.option.uri_path)
-                }]
-                break
+        # set subjects
+        metadata['subjects'] = [
+            {'subject': 'Data Management Plan'},
+            {'subject': 'DMP'}
+        ]
 
-        # set the language from the settings
-        language = settings.ZENODO_PROVIDER.get('language')
-        if language:
-            metadata['languages'] = [
-                {'id': language}
-            ]
+        # set keywords from snapshot values
+        keywords = self.get_values_from_snapshot('project/research_question/keywords', snapshot)
+        for keyword in keywords:
+            if keyword.text:
+                metadata['subjects'].append({'subject': keyword.text})
 
-        # set the publisher from the settings
-        publisher = settings.ZENODO_PROVIDER.get('publisher')
-        if publisher:
-            metadata['publisher'] = publisher
+        # Continue to add other metadata fields as required...
 
-        # set the funding from the settings
-        funding = settings.ZENODO_PROVIDER.get('funding')
-        if funding:
-            metadata['funding'] = funding
-
-        return {
-            'metadata': metadata
-        }
+        return {'metadata': metadata}
