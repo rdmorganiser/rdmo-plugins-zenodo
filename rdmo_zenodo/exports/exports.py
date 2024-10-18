@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 class ZenodoExportProvider(BaseZenodoExportProvider):
 
+    RDMO_PLUGIN_KEY = "zenodo"
+
     rights_uri_options = {
         'dataset_license_types/71': 'cc-by-4.0',
         'dataset_license_types/73': 'cc-by-nc-4.0',
