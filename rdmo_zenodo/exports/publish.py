@@ -56,15 +56,12 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
         if form.is_valid():
             url = self.get_post_url()  # deposit url
             snapshot_id = form.cleaned_data['snapshot']
-            breakpoint()
             snapshot = self.project.snapshots.get(id=snapshot_id)
             data = self.get_post_data(snapshot)
             zen_data_response = self.post(self.request, url, data)
             rdmo_pdf_response = self.render_snapshot_to_pdf(snapshot)
-            zen_pdf_response = self.upload_file_to_zenodo(rdmo_pdf_response.content)
+            _zen_pdf_response = self.upload_file_to_zenodo(rdmo_pdf_response.content)
             return zen_data_response
-
-            return self.post(self.request, url, data)
         else:
             return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=200)
 
