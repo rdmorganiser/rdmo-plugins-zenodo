@@ -8,10 +8,6 @@ from django.utils.translation import gettext_lazy as _
 
 from .base import BaseZenodoExportProvider
 
-from rdmo.projects.models import Snapshot, Value
-from rdmo.domain.models import Attribute
-
-logger = logging.getLogger(__name__)
 
 class ZenodoExportProvider(BaseZenodoExportProvider):
 
