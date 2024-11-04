@@ -1,2 +1,2 @@
-from .exports import ZenodoExportProvider
-from .publish import ZenodoPublishProvider
+from .export_dataset import ZenodoExportProvider as ZenodoExportProvider
+from .publish_snapshot import ZenodoPublishProvider as ZenodoPublishProvider
