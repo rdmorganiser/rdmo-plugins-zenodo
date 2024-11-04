@@ -41,10 +41,6 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
         return f'{self.zenodo_url}/oauth/token'
 
     @property
-    def deposit_url(self):
-        return f'{self.zenodo_url}/api/records'
-
-    @property
     def redirect_path(self):
         if self.RDMO_PLUGIN_KEY is None:
             raise ValueError("the RDMO_PLUGIN_KEY should be set as a class attribute")
@@ -59,20 +55,28 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
         return {**binary_header, **self.authorization_header}
 
     @property
+    def authorized_json_header(self):
+        return {**json_header, **self.authorization_header}
+
+    @property
     def export_file_format(self):
         return settings.ZENODO_PROVIDER.get('export_format', 'pdf')
 
     def record_uploads_url(self, record_id):
         return f"{self.zenodo_url}/uploads/{record_id}"
 
+    @property
+    def records_url(self):
+        return f'{self.zenodo_url}/api/records'
+
     def record_url(self, record_id):
-        return f"{self.deposit_url}/{record_id}"
+        return f"{self.records_url}/{record_id}"
 
     def record_draft_url(self, record_id):
-        return f"{self.deposit_url}/{record_id}/draft"
+        return f"{self.records_url}/{record_id}/draft"
 
     def record_versions_url(self, record_id):
-        return f"{self.deposit_url}/{record_id}/versions"
+        return f"{self.records_url}/{record_id}/versions"
 
     def record_file_url(self, record_id):
         return f"{self.record_draft_url(record_id)}/files"
