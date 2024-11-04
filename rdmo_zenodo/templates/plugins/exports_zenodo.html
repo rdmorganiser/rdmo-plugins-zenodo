@@ -5,6 +5,13 @@
 {% block page %}
 
     <h1>{% trans 'Export to Zenodo' %}</h1>
+    {% if record_id %}
+    <p>
+    {% trans 'This project has a Zenodo record id' %}: <a href="{{ record_id }}">{{ record_id }}</a>
+    </p>
+    {% else %}
+    <p>{% trans 'This project does not have a Zenodo record id.' %}</p>
+    {% endif %}
 
     {% bootstrap_form submit=_('Export to Zenodo') %}
 
