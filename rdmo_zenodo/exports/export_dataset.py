@@ -37,7 +37,7 @@ class ZenodoExportProvider(BaseZenodoExportProvider):
             return redirect('project', self.project.id)
 
         if form.is_valid():
-            url = self.deposit_url
+            url = self.records_url
             data = self.get_post_data(form.cleaned_data['dataset'])
             return self.post(self.request, url, data)
         else:
