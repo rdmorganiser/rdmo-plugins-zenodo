@@ -68,3 +68,13 @@ Usage
 -----
 
 The plugins apears as export options on the RDMO project overview.
+
+Currently, the following properties of the Zenodo data model are created from RDMO attributes:
+
+| Zenodo field  | RDMO attribute                                                                   |
+| ------------- | ---------------------------------------------------------------------------------|
+| `title`       | `project/dataset/title` or `project/dataset/id` or `f'Dataset #{set_index + 1}'` |
+| `description` | `project/dataset/description`                                                    |
+| `rights`      | `project/dataset/sharing/conditions`                                             |
+
+In addition, several fields can be configured in the settings as shown above.
