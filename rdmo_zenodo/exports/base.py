@@ -18,8 +18,6 @@ binary_header = {
 
 class BaseZenodoExportProvider(OauthProviderMixin, Export):
 
-    RDMO_PLUGIN_KEY = None
-
     @property
     def client_id(self):
         return settings.ZENODO_PROVIDER['client_id']
@@ -42,9 +40,7 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
 
     @property
     def redirect_path(self):
-        if self.RDMO_PLUGIN_KEY is None:
-            raise ValueError("the RDMO_PLUGIN_KEY should be set as a class attribute")
-        return reverse('oauth_callback', args=[self.RDMO_PLUGIN_KEY])
+        return reverse('oauth_callback', args=[self.key])
 
     @property
     def authorization_header(self):

@@ -12,8 +12,6 @@ logger = logging.getLogger(__name__)
 
 class ZenodoExportProvider(BaseZenodoExportProvider):
 
-    RDMO_PLUGIN_KEY = "zenodo"
-
     def get_dataset_choices(self):
         datasets = self.get_set('project/dataset/id')
         return [(dataset.set_index, dataset.value) for dataset in datasets]
