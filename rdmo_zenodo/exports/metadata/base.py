@@ -24,6 +24,9 @@ class ZenodoMetadataBuilder:
     keywords: list[str] = field(default_factory=list)
     project_users: list[Any] = field(default_factory=list)
 
+    def get_resource_type(self):
+        {"id": settings.ZENODO_PROVIDER.get("resource_type", self.resource_type)}
+
     def get_creators(self) -> list[dict[str, dict]]:
         if not settings.ZENODO_PROVIDER.get('add_project_members'):
             return []

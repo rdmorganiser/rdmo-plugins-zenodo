@@ -15,6 +15,7 @@ class ZenodoMetadata:
     publisher: Optional[str] = None
     funding: Optional[str] = None
     publication_date: Optional[str] = None
+    publication_type: Optional[str] = None
 
     def to_dict(self, filter_empty: Optional[bool] = False) -> dict[str, dict]:
         """Return dict suitable for POST to Zenodo."""
@@ -30,6 +31,7 @@ class ZenodoMetadata:
             "publisher": self.publisher,
             "funding": self.funding,
             "publication_date": self.publication_date,
+            "publication_type": self.publication_type,
         }
         if filter_empty:
             return self.filter_empty(metadata)
