@@ -54,10 +54,6 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
     def authorized_json_header(self):
         return {**json_header, **self.authorization_header}
 
-    @property
-    def export_file_format(self):
-        return settings.ZENODO_PROVIDER.get('export_format', 'pdf')
-
     def record_uploads_url(self, record_id):
         return f"{self.zenodo_url}/uploads/{record_id}"
 
