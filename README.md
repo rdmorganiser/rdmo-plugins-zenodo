@@ -43,17 +43,21 @@ https://rdmo.example.com/services/oauth/zenodo-publish/callback/
 
 # or for local development
 http://localhost:8000/services/oauth/zenodo/callback/
-http://localhost:8000/services/oauth/zenodo-publish/callback/     
+http://localhost:8000/services/oauth/zenodo-publish/callback/
 ```
 
-After registration, you are provided with a `client_id` and a `client_secret`, 
+After registration, you are provided with a `client_id` and a `client_secret`,
 which need to be added to the RDMO settings in `config/settings/local.py`, along with some other optional entries:
 
 ```python
 ZENODO_PROVIDER = {
     'client_id': os.getenv('ZENODO_CLIENT_ID'),
-    'client_secret':  os.getenv('ZENODO_CLIENT_SECRET'),
-    'add_project_members': True,  # add the members of the project as creators to each dataset    
+    'client_secret': os.getenv('ZENODO_CLIENT_SECRET'),
+    'zenodo_url': 'https://zenodo.org',  # or your own InvenioRDM instance url
+    'zenodo_auth_scope': 'deposit:write',  # optional, default 'deposit:write' or 'user:email' for InvenioRDM
+    'add_project_members': True,  # add the members of the project as creators to exported record
+    'publish_record_id_attribute_prefix': 'https://rdmorganiser.github.io/terms',  # optional, default is shown here
+    'publish_record_id_attribute_key': 'project/metadata/publication/zenodo/concept_record_id',  # optional, default is shown here
     'language': 'eng',            # specify the language
     'publisher': '',              # specify the publisher
     'funding': [                  # specify funding information
@@ -77,12 +81,13 @@ ZENODO_PROVIDER = {
     ]
 }
 ```
-The `resource_type` will be set by the specific export provider, e.g. as `'dataset'` or as `'publication-datamanagementplan'`.
+The `resource_type` will be set by the specific export provider, e.g. as `'dataset'` or as `'publication-datamanagementplan'` for `zenodo-publish` export.
 
 Usage
 -----
 
-The plugins appears as export options on the RDMO project overview. Analoges to Zenodo this plugin can also be used with InvenioRDM instances.
+The plugins appear as export options on the RDMO project overview. For a Zenodo backend, it was tested against https://sandbox.zenodo.org/.
+Analogous to Zenodo this plugin can also be used with InvenioRDM instances for which it was tested against https://inveniordm.web.cern.ch/.
 
 Currently, the following properties of the Zenodo data model are created from RDMO attributes:
 

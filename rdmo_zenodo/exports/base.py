@@ -86,7 +86,7 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
         return {
             'response_type': 'code',
             'client_id': self.client_id,
-            'scope': 'deposit:write',
+            'scope': settings.ZENODO_PROVIDER.get('zenodo_auth_scope') or 'deposit:write',
             'redirect_uri': request.build_absolute_uri(self.redirect_path),
             'state': state
         }

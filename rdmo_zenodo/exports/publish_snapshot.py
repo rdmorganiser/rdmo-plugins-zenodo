@@ -10,12 +10,13 @@ import requests
 
 from rdmo.projects.models import Project
 
-from rdmo_zenodo.exports.metadata.snapshot import ZenodoMetadataSnapshotBuilder
+from rdmo_zenodo.exports.metadata.snapshot import SnapshotZenodoMetadataBuilder
 
 from .base import BaseZenodoExportProvider
 from .forms import ZenodoSnapshotForm
 from .utils import (
     clear_record_id_from_project_value,
+    get_concept_or_parent_id_from_payload,
     get_or_create_snapshot,
     get_record_id_from_project_value,
     render_and_export_project_from_view,
@@ -122,7 +123,7 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
 
         if not record_id:
             logger.warning("validate record_id: no record ID found in project values.")
-            return
+            return None
 
         # Send a GET request to Zenodo to validate the record ID
         response = requests.get(self.record_url(record_id), headers=self.authorization_header)
@@ -130,20 +131,19 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
         # Check if the response was successful
         if response.status_code == 200:
             logger.info(f"Record ID {record_id} is valid.")
-            # the conceptrecid is the  concept record identifier for all verions of this zenodo record
-            # https://inveniordm.docs.cern.ch/reference/metadata/#system-managed-persistent-identifiers
-            # in invenioRDM it is the parent.id field
-            concept_record_id = response.json()['conceptrecid']
+
+            concept_record_id = get_concept_or_parent_id_from_payload(response.json())
             set_record_id_on_project_value(self.project, concept_record_id)
             versions_url = response.json().get('links', {}).get('versions')
             return versions_url
         elif response.status_code == 404:
-            logger.warning(f"Record ID {record_id} is invalid or not found in Zenodo.")
+            logger.warning(f"Record ID {record_id} is invalid or not found in {response.request.url}.")
             # the record_id does not exist, delete it from the project.value.text
             clear_record_id_from_project_value(self.project)
         else:
             # Log any other unexpected response code
             logger.error(f"Error validating record ID {record_id}: {response.status_code}")
+        return None
 
     def post_success(self, request, response):
         # Retrieve project,snapshot,view and export_format from session
@@ -161,7 +161,7 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
 
         if zenodo_url:
             record_id = payload.get('id')
-            concept_record_id = payload["conceptrecid"]
+            concept_record_id = get_concept_or_parent_id_from_payload(payload)
             files_url = payload.get('links', {}).get('files')
 
             _data_commit_pdf_response = self.post_export_file_to_zenodo(
@@ -184,14 +184,14 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
         # https://inveniordm.docs.cern.ch/reference/rest_api_drafts_records/#draft-files
         if record_id is None or files_url is None or self.export_format is None:
             logger.debug("post export file failed, missing args")
-            return
+            return None
 
         rdmo_render_response = render_and_export_project_from_view(
             self.project, self.snapshot, self.export_format, view=self.view
         )
         if rdmo_render_response.status_code != 200:
             logger.debug("Render failed: %s", rdmo_render_response.content.decode())
-            return
+            return None
 
         binary = rdmo_render_response.content
         export_filename = slugify(self.snapshot.title)
@@ -202,7 +202,7 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
         entries = draft_file_post_response.json().get('entries', [])
         draft_file_entry = next(filter(lambda i: i["key"] == filename, entries), None)
         if draft_file_entry is None:
-            return
+            return None
 
         content_url = draft_file_entry.get('links', {}).get('content')
         _data_content_response = requests.put(content_url, headers=self.authorized_binary_header, data=binary)
@@ -235,7 +235,7 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
             description += f" {self.snapshot.description}"
         description += f" Exported to {self.export_format} with the {self.view.title} view."
 
-        metadata_builder = ZenodoMetadataSnapshotBuilder(
+        metadata_builder = SnapshotZenodoMetadataBuilder(
             title=title,
             description=description,
             keywords=[
