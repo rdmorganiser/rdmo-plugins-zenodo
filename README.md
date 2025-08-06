@@ -55,9 +55,9 @@ ZENODO_PROVIDER = {
     'client_secret': os.getenv('ZENODO_CLIENT_SECRET'),
     'zenodo_url': 'https://zenodo.org',  # optional, default https://zenodo.org , or your own InvenioRDM instance url
     'zenodo_auth_scope': 'deposit:write',  # optional, default 'deposit:write' or 'user:email' for InvenioRDM
-    'add_project_members': True,  # add the members of the project as creators to exported record
     'publish_record_id_attribute_prefix': 'https://rdmorganiser.github.io/terms',  # optional, default is shown here
     'publish_record_id_attribute_key': 'project/metadata/publication/zenodo/concept_record_id',  # optional, default is shown here
+    'add_project_members': True,  # add the members of the project as creators to exported record
     'language': 'eng',            # specify the language
     'publisher': '',              # specify the publisher
     'funding': [                  # specify funding information
