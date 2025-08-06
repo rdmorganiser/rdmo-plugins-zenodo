@@ -7,7 +7,7 @@ from .model import ZenodoMetadata
 
 
 @dataclass
-class ZenodoMetadataDatasetBuilder(ZenodoMetadataBuilder):
+class DatasetZenodoMetadataBuilder(ZenodoMetadataBuilder):
 
     resource_type = "dataset"
     upload_type = "dataset"

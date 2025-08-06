@@ -9,7 +9,7 @@ from .model import ZenodoMetadata
 
 
 @dataclass
-class ZenodoMetadataSnapshotBuilder(ZenodoMetadataBuilder):
+class SnapshotZenodoMetadataBuilder(ZenodoMetadataBuilder):
 
     publication_date: Optional[str] = None
     resource_type = "publication-datamanagementplan"

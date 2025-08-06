@@ -4,7 +4,7 @@ from django.conf import settings
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 
-from rdmo_zenodo.exports.metadata.dataset import ZenodoMetadataDatasetBuilder
+from rdmo_zenodo.exports.metadata.dataset import DatasetZenodoMetadataBuilder
 
 from .base import BaseZenodoExportProvider
 from .forms import ZenodoDatasetForm
@@ -66,7 +66,7 @@ class ZenodoExportProvider(BaseZenodoExportProvider):
         if dataset_title:
             description += f" {dataset_title}"
 
-        metadata_builder = ZenodoMetadataDatasetBuilder(
+        metadata_builder = DatasetZenodoMetadataBuilder(
             title=title,
             description=description,
             keywords=[
