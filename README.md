@@ -25,22 +25,35 @@ PROJECT_EXPORTS += [
     ('zenodo-publish', _('Publish to Zenodo'), 'rdmo_zenodo.exports.ZenodoPublishProvider')
 ]
 ```
+When the translation method `_` was not yet imported in your `config/settings/local.py`, then add it this import at the top:
+```
+from django.utils.translation import gettext_lazy as _
+```
 
-An *Developer applications* has to be registered with Zenodo here: https://zenodo.org/account/settings/applications/. For development, you can also use the sandbox instance provided by Zenodo: https://sandbox.zenodo.org/account/settings/applications/. During the registration, you need to enter a **Redirect URI** for your RDMO instance:
+### Zenodo configuration
+
+A *Developer applications* has to be registered with Zenodo here: https://zenodo.org/account/settings/applications/. 
+For development, you can also use the sandbox instance provided by Zenodo: https://sandbox.zenodo.org/account/settings/applications/.
+Or for development against an InvenioRDM Instance the sandbox https://inveniordm.web.cern.ch/ can be used. 
+During the registration, you need to enter a **Redirect URI** for your RDMO instance:
 
 ```
 https://rdmo.example.com/services/oauth/zenodo/callback/
-http://localhost:8000/services/oauth/zenodo/callback/     # for development
+https://rdmo.example.com/services/oauth/zenodo-publish/callback/
+
+# or for local development
+http://localhost:8000/services/oauth/zenodo/callback/
+http://localhost:8000/services/oauth/zenodo-publish/callback/     
 ```
 
-After registration, you are provided with a `client_id` and a `client_secret`, which need to be added to the RDMO settings, along with some other optional entries:
+After registration, you are provided with a `client_id` and a `client_secret`, 
+which need to be added to the RDMO settings in `config/settings/local.py`, along with some other optional entries:
 
 ```python
 ZENODO_PROVIDER = {
     'client_id': os.getenv('ZENODO_CLIENT_ID'),
     'client_secret':  os.getenv('ZENODO_CLIENT_SECRET'),
-    'add_project_members': True,  # add the members of the project as creators to each dataset
-    'resource_type': 'dataset',   # specify the resource type
+    'add_project_members': True,  # add the members of the project as creators to each dataset    
     'language': 'eng',            # specify the language
     'publisher': '',              # specify the publisher
     'funding': [                  # specify funding information
@@ -64,11 +77,12 @@ ZENODO_PROVIDER = {
     ]
 }
 ```
+The `resource_type` will be set by the specific export provider, e.g. as `'dataset'` or as `'publication-datamanagementplan'`.
 
 Usage
 -----
 
-The plugins apears as export options on the RDMO project overview.
+The plugins appears as export options on the RDMO project overview. Analoges to Zenodo this plugin can also be used with InvenioRDM instances.
 
 Currently, the following properties of the Zenodo data model are created from RDMO attributes:
 
