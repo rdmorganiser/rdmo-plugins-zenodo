@@ -28,7 +28,7 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
 
     @property
     def zenodo_url(self):
-        return settings.ZENODO_PROVIDER.get('zenodo_url', 'https://sandbox.zenodo.org').strip('/')
+        return settings.ZENODO_PROVIDER.get('zenodo_url', 'https://zenodo.org').strip('/')
 
     @property
     def authorize_url(self):

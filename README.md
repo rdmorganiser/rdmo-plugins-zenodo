@@ -53,7 +53,7 @@ which need to be added to the RDMO settings in `config/settings/local.py`, along
 ZENODO_PROVIDER = {
     'client_id': os.getenv('ZENODO_CLIENT_ID'),
     'client_secret': os.getenv('ZENODO_CLIENT_SECRET'),
-    'zenodo_url': 'https://zenodo.org',  # or your own InvenioRDM instance url
+    'zenodo_url': 'https://zenodo.org',  # optional, default https://zenodo.org , or your own InvenioRDM instance url
     'zenodo_auth_scope': 'deposit:write',  # optional, default 'deposit:write' or 'user:email' for InvenioRDM
     'add_project_members': True,  # add the members of the project as creators to exported record
     'publish_record_id_attribute_prefix': 'https://rdmorganiser.github.io/terms',  # optional, default is shown here
