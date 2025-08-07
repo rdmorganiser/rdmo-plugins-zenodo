@@ -89,7 +89,6 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
             return redirect('project', self.project.id)
 
         if form.is_valid():
-            url = self.records_url  # deposit url
             snapshot_id = form.cleaned_data['snapshot'] or None
             self.snapshot = get_or_create_snapshot(self.project, snapshot_id=snapshot_id)
             view_id = form.cleaned_data['view'] or None
@@ -111,7 +110,7 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
             else:
                 # else create new draft record
                 data = self.get_post_data()
-                return self.post(self.request, url, data)
+                return self.post(self.request, self.records_url, data)
         else:
             return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=200)
 
