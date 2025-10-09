@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 import attrs
 
+from rdmo_zenodo.exports.metadata.invenio import Creator, FundingRef, Language, ResourceType
 from rdmo_zenodo.exports.metadata.utils import is_iso_date
 
 UploadType = Literal[
@@ -34,7 +35,7 @@ ContributorType = Literal[
 
 
 @attrs.define
-class Creator:
+class ZenodoCreator:
     name: str  # in the format Family name, Given names
     affiliation: str | None = None
     orcid: str | None = None
@@ -77,17 +78,19 @@ class RelatedIdentifier:
 
 @attrs.define
 class ZenodoMetadata:
-    upload_type: UploadType
+    resource_type: ResourceType
     title: str
-    description: str
     publication_date: str = attrs.field(converter=is_iso_date)
-    publication_type: str | None = None
     creators: list[Creator] = attrs.field(factory=list)
+    upload_type: UploadType | None = None
+    description: str | None = None
+    publication_type: str | None = None
     contributors: list[Contributor] = attrs.field(factory=list)
     keywords: list[str] = attrs.field(factory=list)
-    language: str | None = None            # ISO 639-1 code
+    languages: list[Language] = attrs.field(factory=list)
     related_identifiers: list[RelatedIdentifier] = attrs.field(factory=list)
     alternate_identifiers: list[Identifier] = attrs.field(factory=list)
+    funding: list[FundingRef] = attrs.field(factory=list)
     grants: list[Grant] = attrs.field(factory=list)
     references: list[str] = attrs.field(factory=list)
     notes: str | None = None

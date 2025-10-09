@@ -10,7 +10,7 @@ from rdmo.projects.models import Project, Snapshot
 
 @dataclass(frozen=True)
 class MetadataContext:
-    project: Project | None
+    project: Project
     snapshot: Snapshot | None
     set_index: int | None
     get_values: Callable[..., list[Any]]

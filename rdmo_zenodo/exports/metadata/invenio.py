@@ -134,10 +134,22 @@ class RelatedIdentifier:
     resource_type: ResourceType | None = None  # optional
 
 # ------------------------- funding (kept minimal; docs leave room for variations) ------------------------- #
+@attrs.define
+class Funder:
+    id: str | None = None   # commonly {'id': '<award id>'} or {'number': '...', 'title': {...}}
+    name: str | None = None  # commonly {'id': '<funder id>'}
+
+@attrs.define
+class Award:
+    id: str | None = None
+    title: str | None = None
+    number: str | None = None
+    identifiers: list[GenericIdentifier] | None = None
+
 
 @attrs.define
 class FundingRef:
-    funder: dict[str, Any] | None = None  # commonly {'id': '<funder id>'}
+    funder: Funder  # commonly {'id': '<funder id>'}
     award: dict[str, Any] | None = None   # commonly {'id': '<award id>'} or {'number': '...', 'title': {...}}
 
 # ------------------------- access ------------------------- #

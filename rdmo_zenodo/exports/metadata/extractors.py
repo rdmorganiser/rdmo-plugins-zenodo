@@ -82,16 +82,22 @@ def get_publication_type_from_settings() -> str | None:
         return settings.ZENODO_PROVIDER.get("publication_type", "datamanagementplan")
     return None
 
-def get_resource_type_from_settings() -> dict[str, str]:
-    return {"id": settings.ZENODO_PROVIDER.get("resource_type", "publication-datamanagementplan")}
+def get_resource_type_from_settings_and_context(context) -> dict[str, str]:
+    default = "publication-datamanagementplan"
+    if context.set_index is not None:
+        default = "dataset"
+    return settings.ZENODO_PROVIDER.get("resource_type", default)
 
-def get_language_from_settings() -> list:
+def get_language_from_settings() -> str | None:
     if language := settings.ZENODO_PROVIDER.get("language"):
-        return [{"id": language}]
-    return []
+        return language
+    return None
 
 def get_publisher_from_settings() -> str | None:
     return settings.ZENODO_PROVIDER.get("publisher")
+
+def get_funding_from_settings() -> str | None:
+    return settings.ZENODO_PROVIDER.get("funding")
 
 def get_publication_date_from_today() -> str:
     return timezone.localdate().isoformat()
@@ -100,8 +106,7 @@ def get_publication_date_from_today() -> str:
 
 def get_orcid_from_user(user: Any) -> str | None:
     try:
-        orcid = user.socialaccount_set.get(provider="orcid")
-        return orcid
+        return user.socialaccount_set.get(provider="orcid")
     except (ObjectDoesNotExist, AttributeError):
         return None
 
@@ -109,38 +114,44 @@ def get_invenio_creator_from_user(user):
     orcid = get_orcid_from_user(user)
     identifiers = [{"scheme": "orcid", "identifier": orcid.uid}] if orcid else []
     return {
-        "family_name": user.last_name,
-        "given_name": user.first_name,
-        "identifiers": identifiers,
-        "type": "personal",
+        "person_or_org": {
+            "family_name": user.last_name,
+            "given_name": user.first_name,
+            "identifiers": identifiers,
+            "type": "personal",
+        }
     }
 
 def get_zenodo_creator_from_user(user):
+    orcid = get_orcid_from_user(user)
     return {
         "name": f"{user.last_name}, {user.first_name}".strip(),
-        "orcid": get_orcid_from_user(user).uid,
+        "orcid": orcid.uid if orcid else None,
         "affiliation": None,
     }
 
 def get_creators_from_context(context: MetadataContext) -> list[dict[str, Any]]:
     creators = []
     if context.zenodo_backend_type == "zenodo":
-        user_func = get_zenodo_creator_from_user
+        get_creator = get_invenio_creator_from_user
     elif context.zenodo_backend_type == "invenio":
-        user_func = get_invenio_creator_from_user
+        get_creator = get_invenio_creator_from_user
     else:
         raise ValueError(f"Unsupported backend type: {context.zenodo_backend_type}")
     for user in context.project_members:
-        creators.append(user_func(user))
+        creators.append(get_creator(user))
     return creators
 
 # === licenses, subjects, keywords ===
 
 def get_license_id_from_context(context: MetadataContext) -> list[dict[str, str]]:
-    values = context.get_values("project/dataset/sharing/conditions", set_index=context.set_index)
+    set_index = context.set_index if context.set_index is not None else 0
+    values = context.get_values("project/dataset/sharing/conditions", set_index=set_index)
     for v in values:
         if v.option and (license_id := RIGHTS_URI_OPTIONS.get(v.option.uri_path)):
             return [{"id": license_id}]
+        if v.option.additional_input == "text" and v.text:
+            return [{"id": v.text}]
     return []
 
 def get_keywords_from_context(context: MetadataContext) -> list[str]:

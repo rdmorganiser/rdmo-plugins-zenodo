@@ -1,18 +1,24 @@
 import inspect
-from typing import Callable
+from typing import Any, Callable
 
-from cattr import structure
+from attr import AttrsInstance, fields
+from cattrs import ClassValidationError, transform_error
 
 from rdmo_zenodo.exports.metadata.context import MetadataContext
 from rdmo_zenodo.exports.metadata.converter import converter
-from rdmo_zenodo.exports.metadata.exceptions import ExtractionError, SchemaValidationError
+from rdmo_zenodo.exports.metadata.exceptions import SchemaValidationError
 from rdmo_zenodo.exports.metadata.invenio import MetadataV6, RecordV6Payload
 from rdmo_zenodo.exports.metadata.mapper_invenio import INVENIO_FIELD_MAPPER
 from rdmo_zenodo.exports.metadata.mapper_zenodo import ZENODO_FIELD_MAPPER
 from rdmo_zenodo.exports.metadata.zenodo import ZenodoDepositionPayload, ZenodoMetadata
 
+BACKENDS = {
+    "zenodo": (ZENODO_FIELD_MAPPER, ZenodoMetadata, ZenodoDepositionPayload),
+    "invenio": (INVENIO_FIELD_MAPPER, MetadataV6, RecordV6Payload),
+}
 
-def call_extractors_on_field_mapping(context: MetadataContext, fields: dict[str, Callable]):
+def extract_metadata(context: MetadataContext, fields: dict[str, Callable]):
+    # 1: extract metadata from rdmo project values
     extracted = {}
     for name, getter in fields.items():
         # if the callable expects arguments, pass context; else call it directly
@@ -29,27 +35,46 @@ def call_extractors_on_field_mapping(context: MetadataContext, fields: dict[str,
     return extracted
 
 
-def build_payload(context, backend: str):
-    if backend == "zenodo":
-        mapper, schema, payload_cls = (
-            ZENODO_FIELD_MAPPER, ZenodoMetadata, ZenodoDepositionPayload
-        )
-    elif backend == "invenio":
-        mapper, schema, payload_cls = (
-            INVENIO_FIELD_MAPPER, MetadataV6, RecordV6Payload
-        )
-    else:
-        raise ValueError(f"Unknown backend: {backend}")
-    try:
-        metadata_dict = call_extractors_on_field_mapping(context, mapper)
-    except (TypeError, ValueError) as e:
-        raise ExtractionError("Failed to extract data from RDMO project", details=str(e)) from e
+def validate_schema(metadata_dict: dict[str, Any], schema: AttrsInstance) -> Any:
+    # 2: validate metadata dict against attrs schema
 
+    # 2.1 check for unknown  keys
+    allowed = {f.name for f in fields(schema)}
+    unknown = set(metadata_dict) - allowed
+    if unknown:
+        raise SchemaValidationError(
+            f"Unexpected fields in metadata for {schema.__name__}",
+            details=", ".join(sorted(unknown))
+        )
+    # 2.2 structure from dict and return validated
     try:
-        metadata_obj = structure(metadata_dict, schema)
+        return converter.structure(metadata_dict, schema)
+    except ClassValidationError as e:
+        raise SchemaValidationError(
+            "Schema validation failed", details=",".join(transform_error(e))
+        ) from e
     except (TypeError, ValueError) as e:
-        raise SchemaValidationError("Schema validation failed", e) from e
+        raise SchemaValidationError("Invalid metadata structure", details=str(e)) from e
 
-    payload_obj = payload_cls(metadata=metadata_obj)
-    payload = converter.unstructure(payload_obj)
-    return payload
+
+def build_payload_object(metadata_obj: Any, payload_cls: type) -> Any:
+    # 3: build payload dataclass instance
+    return payload_cls(metadata=metadata_obj)
+
+
+def serialize_payload(payload_obj: Any) -> dict[str, Any]:
+    # 4: convert payload object to JSON-serializable dict
+    return converter.unstructure(payload_obj)
+
+
+def build_payload(context: MetadataContext, backend: str) -> dict[str, Any]:
+    # main entrypoint: run the extraction → validation → serialization pipeline
+    try:
+        mapper, schema, payload_cls = BACKENDS[backend]
+    except KeyError:
+        raise ValueError(f"Unknown backend: {backend!r}") from None
+
+    metadata_dict = extract_metadata(context, mapper)
+    metadata_obj = validate_schema(metadata_dict, schema)
+    payload_obj = build_payload_object(metadata_obj, payload_cls)
+    return serialize_payload(payload_obj)
