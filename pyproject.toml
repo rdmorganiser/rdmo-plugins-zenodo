@@ -30,6 +30,8 @@ classifiers = [
 ]
 dependencies = [
     "rdmo",
+    "attrs",
+    "cattrs",
 ]
 dynamic = ["version"]
 
