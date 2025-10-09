@@ -1,6 +1,5 @@
 import logging
 
-from django.conf import settings
 from django.shortcuts import redirect, render
 from django.utils.formats import localize
 from django.utils.text import slugify
@@ -10,17 +9,16 @@ import requests
 
 from rdmo.projects.models import Project
 
-from rdmo_zenodo.exports.metadata.snapshot import SnapshotZenodoMetadataBuilder
-
 from .base import BaseZenodoExportProvider
 from .forms import ZenodoSnapshotForm
+from .metadata.exceptions import MetadataBuildError
 from .utils import (
     clear_record_id_from_project_value,
     get_concept_or_parent_id_from_payload,
     get_or_create_snapshot,
     get_record_id_from_project_value,
     render_and_export_project_from_view,
-    set_record_id_on_project_value,
+    save_record_id_in_project_value,
 )
 
 logger = logging.getLogger(__name__)
@@ -109,8 +107,12 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
                 return self.post(self.request, record_versions_url, {})
             else:
                 # else create new draft record
-                data = self.get_post_data()
-                return self.post(self.request, self.records_url, data)
+                try:
+                    payload = self.get_metadata()
+                except MetadataBuildError as e:
+                    form.add_error(None, str(e))
+                    return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=400)
+                return self.post(self.request, self.records_url, payload)
         else:
             return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=200)
 
@@ -132,7 +134,7 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
             logger.info(f"Record ID {record_id} is valid.")
 
             concept_record_id = get_concept_or_parent_id_from_payload(response.json())
-            set_record_id_on_project_value(self.project, concept_record_id)
+            save_record_id_in_project_value(self.project, concept_record_id)
             versions_url = response.json().get('links', {}).get('versions')
             return versions_url
         elif response.status_code == 404:
@@ -151,7 +153,7 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
         if 'versions' in response.request.url and 'publication_date' not in response.json().get('metadata',{}):
             # metadata needs to be posted to the new version with a new request and response
             zenodo_api_url = response.json().get('links', {}).get('self')
-            data = self.get_post_data()
+            data = self.get_metadata()
             response = requests.put(zenodo_api_url, json=data, headers=self.authorized_json_header)
             logger.debug("PUT to %s", zenodo_api_url)
 
@@ -163,12 +165,12 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
             concept_record_id = get_concept_or_parent_id_from_payload(payload)
             files_url = payload.get('links', {}).get('files')
 
-            _data_commit_pdf_response = self.post_export_file_to_zenodo(
+            self.post_export_file_to_zenodo(
                 record_id=record_id, files_url=files_url,
             )
-            _publish_response = self.publish_draft_record(record_id=record_id)
+            self.publish_draft_record(record_id=record_id)
 
-            set_record_id_on_project_value(self.project, concept_record_id)
+            save_record_id_in_project_value(self.project, concept_record_id)
 
             return redirect(zenodo_url)
         else:
@@ -222,29 +224,3 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
         response = requests.post(publish_url, headers=self.authorization_header)
         logger.debug("POST to %s", publish_url)
         return response
-
-    def get_post_data(self):
-        # see https://inveniordm.docs.cern.ch/reference/metadata/ for invenio metadata
-        if self.project is None or self.snapshot is None:
-            raise ValueError("Project and Snapshot are required to get post data.")
-
-        title = f"{self.project.title} - Snapshot: {self.snapshot.title}"
-        description = f"Data Management Plan for project {self.project.title}."
-        if self.snapshot.description:
-            description += f" {self.snapshot.description}"
-        description += f" Exported to {self.export_format} with the {self.view.title} view."
-
-        metadata_builder = SnapshotZenodoMetadataBuilder(
-            title=title,
-            description=description,
-            keywords=[
-                i.text
-                for i in self.get_values("project/research_question/keywords") if i.text
-            ],
-            rights_uri_paths=[
-                i.option.uri_path
-                for i in self.get_values("project/dataset/sharing/conditions") if i.option
-            ],
-            project_users=self.project.user.all() if settings.ZENODO_PROVIDER.get("add_project_members") else [],
-        )
-        return metadata_builder.to_post_data(filter_empty=True)

@@ -56,7 +56,7 @@ def get_record_id_from_project_value(project):
         return None
 
 
-def set_record_id_on_project_value(project, record_id):
+def save_record_id_in_project_value(project, record_id):
     if project is None or record_id is None:
         return
 
@@ -75,7 +75,7 @@ def set_record_id_on_project_value(project, record_id):
 
 def clear_record_id_from_project_value(project):
     """Clear the record_id text from the project's values by setting it to an empty string."""
-    set_record_id_on_project_value(project, '')
+    save_record_id_in_project_value(project, '')
 
 
 def render_and_export_project_from_view(project, snapshot, export_format, view):

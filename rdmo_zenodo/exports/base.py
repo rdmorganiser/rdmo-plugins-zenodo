@@ -6,6 +6,9 @@ from django.shortcuts import reverse
 from rdmo.projects.exports import Export
 from rdmo.services.providers import OauthProviderMixin
 
+from rdmo_zenodo.exports.metadata.builder import build_payload
+from rdmo_zenodo.exports.metadata.context import MetadataContext
+
 logger = logging.getLogger(__name__)
 
 json_header = {
@@ -31,6 +34,12 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
         return settings.ZENODO_PROVIDER.get('zenodo_url', 'https://zenodo.org').strip('/')
 
     @property
+    def zenodo_backend_type(self):
+        if 'zenodo' in self.zenodo_url:
+            return 'zenodo'
+        return 'invenio'
+
+    @property
     def authorize_url(self):
         return f'{self.zenodo_url}/oauth/authorize'
 
@@ -45,6 +54,15 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
     @property
     def authorization_header(self):
         return self.get_authorization_headers(self.get_from_session(self.request, 'access_token'))
+
+    @property
+    def authorization_scope(self):
+        scope = settings.ZENODO_PROVIDER.get('zenodo_auth_scope')
+        if scope:
+            return scope
+        if self.zenodo_backend_type == 'zenodo':
+            return 'deposit:write'
+        return 'user:email'
 
     @property
     def authorized_binary_header(self):
@@ -86,7 +104,7 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
         return {
             'response_type': 'code',
             'client_id': self.client_id,
-            'scope': settings.ZENODO_PROVIDER.get('zenodo_auth_scope') or 'deposit:write',
+            'scope': self.authorization_scope,
             'redirect_uri': request.build_absolute_uri(self.redirect_path),
             'state': state
         }
@@ -99,3 +117,14 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
             'redirect_uri': request.build_absolute_uri(self.redirect_path),
             'code': request.GET.get('code')
         }
+
+    def get_metadata(self, set_index=None):
+        context = MetadataContext(
+            project=self.project,
+            snapshot=self.snapshot,
+            set_index=set_index,
+            get_values=self.get_values,
+            get_text=self.get_text,
+            zenodo_backend_type=self.zenodo_backend_type,
+        )
+        return build_payload(context, self.zenodo_backend_type)

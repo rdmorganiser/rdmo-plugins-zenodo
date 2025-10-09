@@ -1,13 +1,11 @@
 import logging
 
-from django.conf import settings
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 
-from rdmo_zenodo.exports.metadata.dataset import DatasetZenodoMetadataBuilder
-
 from .base import BaseZenodoExportProvider
 from .forms import ZenodoDatasetForm
+from .metadata.exceptions import MetadataBuildError
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +36,12 @@ class ZenodoExportProvider(BaseZenodoExportProvider):
 
         if form.is_valid():
             url = self.records_url
-            data = self.get_post_data(form.cleaned_data['dataset'])
-            return self.post(self.request, url, data)
+            try:
+                payload = self.get_metadata(set_index=form.cleaned_data['dataset'])
+            except MetadataBuildError as e:
+                form.add_error(None, str(e))
+                return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=400)
+            return self.post(self.request, url, payload)
         else:
             return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=200)
 
@@ -53,30 +55,4 @@ class ZenodoExportProvider(BaseZenodoExportProvider):
                 'errors': [_('The URL of the new dataset could not be retrieved.')]
             }, status=200)
 
-    def get_post_data(self, set_index):
-        # see https://inveniordm.docs.cern.ch/reference/metadata/ for invenio metadata
-        dataset_title = self.get_text("project/dataset/title", set_index=set_index)
-        title = (
-                dataset_title or
-                self.get_text('project/dataset/id', set_index=set_index) or
-                f'Dataset #{int(set_index) + 1}'
-         )
-        description = f"Data Management Plan for project {self.project.title}."
 
-        if dataset_title:
-            description += f" {dataset_title}"
-
-        metadata_builder = DatasetZenodoMetadataBuilder(
-            title=title,
-            description=description,
-            keywords=[
-                i.text
-                for i in self.get_values("project/research_question/keywords") if i.text
-            ],
-            rights_uri_paths=[
-                i.option.uri_path
-                for i in self.get_values("project/dataset/sharing/conditions", set_index=set_index) if i.option
-            ],
-            project_users=self.project.user.all() if settings.ZENODO_PROVIDER.get("add_project_members") else [],
-        )
-        return metadata_builder.to_post_data(filter_empty=True)

@@ -34,7 +34,6 @@ class ZenodoSnapshotForm(forms.Form):
         snapshot_choices = kwargs.pop('snapshot_choices', [])
         view_choices = kwargs.pop("view_choices", [])
         super().__init__(*args, **kwargs)
-        snapshot_choices = [(None, _("Create new snapshot")), *snapshot_choices]
-        self.fields['snapshot'].choices = snapshot_choices
+        self.fields['snapshot'].choices = [(None, _("Create new snapshot")), *snapshot_choices]
         self.fields['snapshot'].initial = None
         self.fields['view'].choices = view_choices
