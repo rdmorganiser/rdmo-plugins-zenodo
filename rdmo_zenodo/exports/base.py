@@ -6,7 +6,7 @@ from django.shortcuts import reverse
 from rdmo.projects.exports import Export
 from rdmo.services.providers import OauthProviderMixin
 
-from rdmo_zenodo.exports.metadata.builder import build_payload
+from rdmo_zenodo.exports.metadata.builder import METADATA_METHODS, extract_metadata, serialize_payload, validate_schema
 from rdmo_zenodo.exports.metadata.context import MetadataContext
 
 logger = logging.getLogger(__name__)
@@ -57,8 +57,7 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
 
     @property
     def authorization_scope(self):
-        scope = settings.ZENODO_PROVIDER.get('zenodo_auth_scope')
-        if scope:
+        if scope := settings.ZENODO_PROVIDER.get('zenodo_auth_scope'):
             return scope
         if self.zenodo_backend_type == 'zenodo':
             return 'deposit:write'
@@ -118,8 +117,16 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
             'code': request.GET.get('code')
         }
 
-    def get_metadata(self, set_index=None):
-        context = MetadataContext(
+    def post_with_retry(self, request, url, data):
+        response = self.post(request, url, data)
+        # Hacky way: in case of OAuth error (from e.g. 403), pop access_token and re-try
+        if 'OAuth' in response.content.decode():
+            self.pop_from_session(request, 'access_token')
+            response = self.post(request, url, data)
+        return response
+
+    def get_metadata_context(self, set_index=None):
+        return MetadataContext(
             project=self.project,
             snapshot=self.snapshot,
             set_index=set_index,
@@ -127,4 +134,14 @@ class BaseZenodoExportProvider(OauthProviderMixin, Export):
             get_text=self.get_text,
             zenodo_backend_type=self.zenodo_backend_type,
         )
-        return build_payload(context, self.zenodo_backend_type)
+
+    def get_metadata(self, set_index=None):
+
+        context = self.get_metadata_context(set_index=set_index)
+
+        mapper, schema, payload_cls = METADATA_METHODS[self.zenodo_backend_type]
+        metadata_dict = extract_metadata(context, mapper)
+        metadata_obj = validate_schema(metadata_dict, schema)
+
+        payload_obj = payload_cls(metadata=metadata_obj)
+        return serialize_payload(payload_obj)

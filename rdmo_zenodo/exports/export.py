@@ -40,19 +40,20 @@ class ZenodoExportProvider(BaseZenodoExportProvider):
                 payload = self.get_metadata(set_index=form.cleaned_data['dataset'])
             except MetadataBuildError as e:
                 form.add_error(None, str(e))
-                return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=400)
-            return self.post(self.request, url, payload)
+                return render(
+                    self.request, 'plugins/exports_zenodo.html', {'form': form}, status=400
+                )
+            return self.post_with_retry(self.request, url, payload)
+
         else:
             return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=200)
 
     def post_success(self, request, response):
-        zenodo_url = response.json().get('links', {}).get('self_html')
-        if zenodo_url:
+        if zenodo_url := response.json().get('links', {}).get('self_html'):
             return redirect(zenodo_url)
-        else:
-            return render(request, 'core/error.html', {
-                'title': _('ZENODO error'),
-                'errors': [_('The URL of the new dataset could not be retrieved.')]
-            }, status=200)
+        return render(request, 'core/error.html', {
+            'title': _('ZENODO error'),
+            'errors': [_('The URL of the new dataset could not be retrieved.')]
+        }, status=200)
 
 

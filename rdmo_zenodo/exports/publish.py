@@ -1,5 +1,6 @@
 import logging
 
+from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect, render
 from django.utils.formats import localize
 from django.utils.text import slugify
@@ -99,26 +100,24 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
             self.store_in_session(self.request, 'view_id', self.view.id)
             self.store_in_session(self.request, 'export_format', self.export_format)
 
-            record_versions_url = self.validate_record_id_from_project_value_at_zenodo()
-            # TODO, currently the authentication can get stuck when trying out the dataset export
-            # first and this one afterwards, a 403 needs to be handled in the Export class.
-            if record_versions_url:
+            if record_versions_url := self.validate_record_id_from_project_value_at_zenodo():
                 # if record exists then post new version to zenodo, no data required
-                return self.post(self.request, record_versions_url, {})
+                # a 403 post_with_retry handled in retry.
+                return self.post_with_retry(self.request, record_versions_url, {})
             else:
                 # else create new draft record
                 try:
                     payload = self.get_metadata()
                 except MetadataBuildError as e:
                     form.add_error(None, str(e))
-                    return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=400)
-                return self.post(self.request, self.records_url, payload)
+                    return render(
+                        self.request, 'plugins/exports_zenodo.html', {'form': form}, status=400
+                    )
+                return self.post_with_retry(self.request, self.records_url, payload)
         else:
             return render(self.request, 'plugins/exports_zenodo.html', {'form': form}, status=200)
 
     def validate_record_id_from_project_value_at_zenodo(self):
-        """Validate the Zenodo record_id stored in the project."""
-
         # Retrieve record_id from the project's stored values
         record_id = get_record_id_from_project_value(self.project)
 
@@ -150,10 +149,17 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
         # Retrieve project,snapshot,view and export_format from session
         self.get_from_session_and_set_on_self(request)
         self.request = request  # and set request on self
-        if 'versions' in response.request.url and 'publication_date' not in response.json().get('metadata',{}):
+        if not response.json()['is_draft']:  # and ... response.json()['status'] == ...
             # metadata needs to be posted to the new version with a new request and response
             zenodo_api_url = response.json().get('links', {}).get('self')
-            data = self.get_metadata()
+            try:
+                data = self.get_metadata()
+            except MetadataBuildError as e:
+                return render(request, 'core/error.html', {
+                    'title': _('Metadata error'),
+                    'errors': [_('Error in the metadata'), str(e)]
+                }, status=200)
+
             response = requests.put(zenodo_api_url, json=data, headers=self.authorized_json_header)
             logger.debug("PUT to %s", zenodo_api_url)
 
@@ -164,19 +170,44 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
             record_id = payload.get('id')
             concept_record_id = get_concept_or_parent_id_from_payload(payload)
             files_url = payload.get('links', {}).get('files')
-
-            self.post_export_file_to_zenodo(
+            export_response = self.post_export_file_to_zenodo(
                 record_id=record_id, files_url=files_url,
             )
-            self.publish_draft_record(record_id=record_id)
+            if 500 > export_response.status_code >= 400:
+                if isinstance(export_response, HttpResponseBadRequest):
+                    if export_response.content.decode().startswith('Render to format failed.'):
+                        message = 'Render to format failed. Try another view or format.'
+                    else:
+                        message = export_response.content.decode()
+
+                    return render(request, 'core/error.html', {
+                        'title': _('Export error'),
+                        'errors': [_('The project could not be exported.'), message],
+                    }, status=200)
+
+                if export_response.url.startswith(self.zenodo_url):
+                    return render(request, 'core/error.html', {
+                        'title': _('Export error'),
+                        'errors': [_('The project could not be uploaded.'), response.json().get('message')],
+                    }, status=200)
+
+
+            publish_response = self.publish_draft_record(record_id=record_id)
+            if 500 > publish_response.status_code >= 400:
+                return render(request, 'core/error.html', {
+                    'title': _('Publish error'),
+                    'errors': [_('The project could not be published.'),
+                        publish_response.json()['message'],
+                        publish_response.json()['errors'],
+                   ],
+                }, status=200)
 
             save_record_id_in_project_value(self.project, concept_record_id)
-
             return redirect(zenodo_url)
         else:
             return render(request, 'core/error.html', {
                 'title': _('ZENODO error'),
-                'errors': [_('The URL of the new dataset could not be retrieved.')]
+                'errors': [_('The URL of the new publication could not be retrieved.')]
             }, status=200)
 
     def post_export_file_to_zenodo(
@@ -191,8 +222,8 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
             self.project, self.snapshot, self.export_format, view=self.view
         )
         if rdmo_render_response.status_code != 200:
-            logger.debug("Render failed: %s", rdmo_render_response.content.decode())
-            return None
+            logger.error("Render failed: %s", rdmo_render_response.content.decode())
+            return rdmo_render_response
 
         binary = rdmo_render_response.content
         export_filename = slugify(self.snapshot.title)
@@ -203,7 +234,8 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
         entries = draft_file_post_response.json().get('entries', [])
         draft_file_entry = next(filter(lambda i: i["key"] == filename, entries), None)
         if draft_file_entry is None:
-            return None
+            breakpoint()
+            return draft_file_post_response
 
         content_url = draft_file_entry.get('links', {}).get('content')
         _data_content_response = requests.put(content_url, headers=self.authorized_binary_header, data=binary)
@@ -222,5 +254,5 @@ class ZenodoPublishProvider(BaseZenodoExportProvider):
             return None
         publish_url = self.record_publish_url(record_id)
         response = requests.post(publish_url, headers=self.authorization_header)
-        logger.debug("POST to %s", publish_url)
+        logger.debug("POST to %s with response ", publish_url, response)
         return response
