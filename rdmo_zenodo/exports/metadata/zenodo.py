@@ -1,5 +1,6 @@
-# References, https://zenodraft.github.io/metadata-schema-zenodo/latest/schema.json
+# https://zenodraft.github.io/metadata-schema-zenodo/latest/schema.json
 # https://developers.zenodo.org/#depositions
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -64,9 +65,17 @@ class Identifier:
 class Grant:
     id: str                        # e.g. "10.13039/501100000780::101122483"
 
+    @classmethod
+    def from_string(cls, value: str) -> Grant:
+        return cls(id=value)
+
 @attrs.define
 class Community:
     identifier: str                # e.g. "zenodo-community-id"
+
+    @classmethod
+    def from_string(cls, value: str) -> Community:
+        return cls(identifier=value)
 
 @attrs.define
 class RelatedIdentifier:

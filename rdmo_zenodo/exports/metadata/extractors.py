@@ -26,7 +26,7 @@ def get_title_from_project(context: MetadataContext) -> str:
 
 def get_title_from_dataset(context: MetadataContext) -> str:
     if context.set_index is None:
-        return "Dataset"
+        raise ValueError("Cannot extract title from dataset without set_index")
     title = context.get_text("project/dataset/title", set_index=context.set_index)
     if title:
         return title
@@ -82,11 +82,12 @@ def get_publication_type_from_settings() -> str | None:
         return settings.ZENODO_PROVIDER.get("publication_type", "datamanagementplan")
     return None
 
-def get_resource_type_from_settings_and_context(context) -> dict[str, str]:
-    default = "publication-datamanagementplan"
+def get_resource_type_from_settings_and_context(context) -> str:
+    if resource_type := settings.ZENODO_PROVIDER.get("resource_type"):
+        return resource_type
     if context.set_index is not None:
-        default = "dataset"
-    return settings.ZENODO_PROVIDER.get("resource_type", default)
+        return "dataset"
+    return "publication-datamanagementplan"
 
 def get_language_from_settings() -> str | None:
     if language := settings.ZENODO_PROVIDER.get("language"):
@@ -132,26 +133,21 @@ def get_zenodo_creator_from_user(user):
 
 def get_creators_from_context(context: MetadataContext) -> list[dict[str, Any]]:
     creators = []
-    if context.zenodo_backend_type == "zenodo":
-        get_creator = get_invenio_creator_from_user
-    elif context.zenodo_backend_type == "invenio":
-        get_creator = get_invenio_creator_from_user
-    else:
-        raise ValueError(f"Unsupported backend type: {context.zenodo_backend_type}")
+    get_creator = get_invenio_creator_from_user
     for user in context.project_members:
         creators.append(get_creator(user))
     return creators
 
 # === licenses, subjects, keywords ===
 
-def get_license_id_from_context(context: MetadataContext) -> list[dict[str, str]]:
+def get_license_id_from_context(context: MetadataContext) -> list[dict[str, str]] | list[dict[str, dict[str,str]]]:
     set_index = context.set_index if context.set_index is not None else 0
     values = context.get_values("project/dataset/sharing/conditions", set_index=set_index)
     for v in values:
         if v.option and (license_id := RIGHTS_URI_OPTIONS.get(v.option.uri_path)):
             return [{"id": license_id}]
         if v.option.additional_input == "text" and v.text:
-            return [{"id": v.text}]
+            return [{"title": {"en": v.text}}]
     return []
 
 def get_keywords_from_context(context: MetadataContext) -> list[str]:

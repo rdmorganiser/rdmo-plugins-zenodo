@@ -12,10 +12,10 @@ from rdmo.projects.models import Project, Snapshot
 class MetadataContext:
     project: Project
     snapshot: Snapshot | None
-    set_index: int | None
     get_values: Callable[..., list[Any]]
     get_text: Callable[..., str | None]
     zenodo_backend_type: str
+    set_index: int | None = None
     view: Any | None = None
     export_format: str | None = None
 
