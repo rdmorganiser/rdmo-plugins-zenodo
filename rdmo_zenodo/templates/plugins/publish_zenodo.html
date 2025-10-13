@@ -1,0 +1,18 @@
+{% extends 'core/page.html' %}
+{% load i18n %}
+{% load core_tags %}
+
+{% block page %}
+
+    <h1>{% trans 'Export and Publish to Zenodo' %}</h1>
+    {% if record_id %}
+    <p>
+    {% trans 'This project has a Zenodo record id' %}: <a href="{{ record_id }}">{{ record_id }}</a>
+    </p>
+    {% else %}
+    <p>{% trans 'This project does not have a Zenodo record id.' %}</p>
+    {% endif %}
+
+    {% bootstrap_form submit=_('Publish to Zenodo') %}
+
+{% endblock %}

@@ -30,6 +30,8 @@ classifiers = [
 ]
 dependencies = [
     "rdmo",
+    "attrs",
+    "cattrs",
 ]
 dynamic = ["version"]
 
@@ -55,6 +57,8 @@ version = {attr = "rdmo_zenodo.__version__"}
 [tool.ruff]
 target-version = "py38"
 line-length = 120
+
+[tool.ruff.lint]
 select = [
   "B",    # flake8-bugbear
   "C4",   # flake8-comprehensions
@@ -74,7 +78,7 @@ ignore = [
   "RUF012", # mutable-class-default
 ]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 section-order = [
   "future",
   "standard-library",
@@ -87,7 +91,7 @@ section-order = [
   "local-folder"
 ]
 
-[tool.ruff.isort.sections]
+[tool.ruff.lint.isort.sections]
 pytest = ["pytest"]
 django = ["django"]
 rest_framework = ["rest_framework"]

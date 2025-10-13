@@ -2,8 +2,7 @@
 
 This plugin implements an [export provider](https://rdmo.readthedocs.io/en/latest/plugins/index.html#export-providers) for RDMO, which lets users push metadata from RDMO to Zenodo work packages. The plugin uses [OAUTH 2.0](https://oauth.net/2/), so that users use their respective accounts in both systems. It creates only the metadata in Zenodo, so that users need to upload the actual data on Zenodo themselfes.
 
-Setup
------
+## Setup
 
 Install the plugin in your RDMO virtual environment using pip (directly from GitHub):
 
@@ -21,25 +20,45 @@ Add the plugin to `PROJECT_EXPORTS` in `config/settings/local.py`:
 
 ```python
 PROJECT_EXPORTS += [
-    ('zenodo', _('Directly to Zenodo'), 'rdmo_zenodo.exports.ZenodoExportProvider')
+    ('zenodo', _('Directly to Zenodo'), 'rdmo_zenodo.exports.ZenodoExportProvider'),
+    ('zenodo-publish', _('Publish to Zenodo'), 'rdmo_zenodo.exports.ZenodoPublishProvider')
 ]
 ```
+When the translation method `_` was not yet imported in your `config/settings/local.py`, then add it this import at the top:
+```
+from django.utils.translation import gettext_lazy as _
+```
 
-An *Developer applications* has to be registered with Zenodo here: https://zenodo.org/account/settings/applications/. For development, you can also use the sandbox instance provided by Zenodo: https://sandbox.zenodo.org/account/settings/applications/. During the registration, you need to enter a **Redirect URI** for your RDMO instance:
+## Configuration
+
+### Register a *Developer application* for authentication
+
+A *Developer applications* has to be registered with Zenodo here: https://zenodo.org/account/settings/applications/. 
+For development, you can also use the sandbox instance provided by Zenodo: https://sandbox.zenodo.org/account/settings/applications/.
+Or for development against an InvenioRDM Instance the sandbox https://inveniordm.web.cern.ch/ can be used. 
+During the registration, you need to enter a **Redirect URI** for your RDMO instance:
 
 ```
 https://rdmo.example.com/services/oauth/zenodo/callback/
-http://localhost:8000/services/oauth/zenodo/callback/     # for development
+https://rdmo.example.com/services/oauth/zenodo-publish/callback/
+
+# or for local development
+http://localhost:8000/services/oauth/zenodo/callback/
+http://localhost:8000/services/oauth/zenodo-publish/callback/
 ```
 
-After registration, you are provided with a `client_id` and a `client_secret`, which need to be added to the RDMO settings, along with some other optional entries:
+### Configure the RDMO settings 
+After registration, you are provided with a `client_id` and a `client_secret`,
+which need to be added to the RDMO settings in `config/settings/local.py`, along with some other optional entries:
 
 ```python
 ZENODO_PROVIDER = {
     'client_id': os.getenv('ZENODO_CLIENT_ID'),
-    'client_secret':  os.getenv('ZENODO_CLIENT_SECRET'),
-    'add_project_members': True,  # add the members of the project as creators to each dataset
-    'resource_type': 'dataset',   # specify the resource type
+    'client_secret': os.getenv('ZENODO_CLIENT_SECRET'),
+    'zenodo_url': 'https://zenodo.org',  # optional, default shown here , or your own InvenioRDM instance url
+    'zenodo_auth_scope': 'deposit:write',  # optional, default shown here or 'user:email' for InvenioRDM
+    'zenodo_record_id_uri': 'https://rdmorganiser.github.io/terms/project/metadata/publication/zenodo/record_id',  # optional, default is shown here
+    'add_project_members': True,  # add the members of the project as creators to exported record
     'language': 'eng',            # specify the language
     'publisher': '',              # specify the publisher
     'funding': [                  # specify funding information
@@ -63,18 +82,27 @@ ZENODO_PROVIDER = {
     ]
 }
 ```
+The `resource_type` will be set by the specific export provider, e.g. as `'dataset'` or as `'publication-datamanagementplan'` for `zenodo-publish` export.
 
-Usage
------
+## Usage
 
-The plugins apears as export options on the RDMO project overview.
+The plugins appear as export options on the RDMO project overview. For a Zenodo backend, it was tested against https://sandbox.zenodo.org/.
+Analogous to Zenodo this plugin can also be used with InvenioRDM instances for which it was tested against https://inveniordm.web.cern.ch/.
 
 Currently, the following properties of the Zenodo data model are created from RDMO attributes:
 
-| Zenodo field  | RDMO attribute                                                                   |
-| ------------- | ---------------------------------------------------------------------------------|
-| `title`       | `project/dataset/title` or `project/dataset/id` or `f'Dataset #{set_index + 1}'` |
-| `description` | `project/dataset/description`                                                    |
-| `rights`      | `project/dataset/sharing/conditions`                                             |
-
+| Zenodo field          | RDMO attribute                                                                                                        |
+|-----------------------|-----------------------------------------------------------------------------------------------------------------------|
+| `title`               | `project/dataset/title` or `project/dataset/id` or `f'Dataset #{set_index + 1}'` or `project.title` or `snapshot.title` |
+| `description`         | `project/dataset/description`                                                                                         |
+| `license` or `rights` | `project/dataset/sharing/conditions`                                                                                  |
+| `subjects`            | `project/research_question/keywords`                                                                                  |
+| `creators`            | from `project.member`                                                                                                 |
 In addition, several fields can be configured in the settings as shown above.
+
+### Development
+Information about the API schemas can be found at:
+* https://inveniordm.docs.cern.ch/reference/metadata/#metadata
+* https://github.com/inveniosoftware/invenio-rdm-records/tree/master/invenio_rdm_records/records/jsonschemas/records
+* https://zenodraft.github.io/metadata-schema-zenodo/latest/schema.json
+* https://developers.zenodo.org/#depositions
